@@ -981,7 +981,7 @@ export default function App() {
               animation: "goalFlash 1.2s ease-out forwards"
             }}
           >
-            GOAL UPDATE ⚽
+            FULL TIME!
           </div>
         )}
 
@@ -1002,7 +1002,7 @@ export default function App() {
               animation: "fullTimeReveal 1.8s ease-out forwards"
             }}
           >
-            FULL TIME
+            GOAL UPDATE ⚽
           </div>
         )}
 
