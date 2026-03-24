@@ -379,57 +379,80 @@ export default function App() {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session || null);
+  let mounted = true;
+
+  const init = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!mounted) return;
+
+    setSession(data.session || null);
+    setAuthReady(true);
+    await fetchData();
+  };
+
+  init();
+
+  const { data: authListener } = supabase.auth.onAuthStateChange(
+    async (_event, nextSession) => {
+      if (!mounted) return;
+      setSession(nextSession || null);
       setAuthReady(true);
+    }
+  );
+
+  const channel = supabase
+    .channel("ballers-live-realtime")
+
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "match_state" },
+      async (payload) => {
+        console.log("MATCH UPDATE 🔴", payload);
+        if (!mounted) return;
+        await fetchData();
+      }
+    )
+
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "teams" },
+      async (payload) => {
+        console.log("TEAMS UPDATE 🟡", payload);
+        if (!mounted) return;
+        await fetchData();
+      }
+    )
+
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "results" },
+      async (payload) => {
+        console.log("RESULT UPDATE 🟢", payload);
+        if (!mounted) return;
+        await fetchData();
+      }
+    )
+
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "playoffs" },
+      async (payload) => {
+        console.log("PLAYOFF UPDATE 🔵", payload);
+        if (!mounted) return;
+        await fetchData();
+      }
+    )
+
+    .subscribe((status) => {
+      console.log("REALTIME STATUS:", status);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, nextSession) => {
-        setSession(nextSession || null);
-        setAuthReady(true);
-      }
-    );
-
-    fetchData();
-
-    const channel = supabase
-      .channel("ballers-live-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "teams" },
-        async () => {
-          await fetchData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "match_state" },
-        async () => {
-          await fetchData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "results" },
-        async () => {
-          await fetchData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "playoffs" },
-        async () => {
-          await fetchData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      authListener.subscription.unsubscribe();
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  return () => {
+    mounted = false;
+    authListener?.subscription?.unsubscribe();
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   useEffect(() => {
     const prev = prevLiveScore;
