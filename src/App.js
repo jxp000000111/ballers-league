@@ -187,6 +187,28 @@ function LoginScreen({ email, setEmail, password, setPassword, onLogin, loading 
   );
 }
 
+function getFixtureStatus(matchNo, matchState, resultsMap) {
+  if (resultsMap[matchNo]) return "FT";
+  if (matchState.match_index + 1 === matchNo) return "LIVE";
+  return "YET";
+}
+
+function getFixtureScore(matchNo, matchState, resultsMap) {
+  if (resultsMap[matchNo]) return `${resultsMap[matchNo].score1}-${resultsMap[matchNo].score2}`;
+  if (matchState.match_index + 1 === matchNo) return `${matchState.score1}-${matchState.score2}`;
+  return "vs";
+}
+
+function getStatusPill(status) {
+  if (status === "LIVE") {
+    return { label: "LIVE", bg: "rgba(239,68,68,0.18)", color: "#ff8f8f", border: "1px solid rgba(239,68,68,0.35)" };
+  }
+  if (status === "FT") {
+    return { label: "FULL TIME", bg: "rgba(34,197,94,0.16)", color: "#91f0b0", border: "1px solid rgba(34,197,94,0.28)" };
+  }
+  return { label: "YET TO PLAY", bg: "rgba(255,255,255,0.08)", color: "#d8e4ff", border: "1px solid rgba(255,255,255,0.12)" };
+}
+
 export default function App() {
   const [teams, setTeams] = useState([]);
   const [matchState, setMatchState] = useState({ match_index: 0, score1: 0, score2: 0, ticker: "Welcome to Ballers League Vol. II" });
@@ -280,6 +302,29 @@ export default function App() {
   }, [teams]);
 
   const top4 = sorted.slice(0, 4);
+
+  const resultsMap = useMemo(() => {
+    const map = {};
+    recentResults.forEach((r) => {
+      map[r.match_no] = r;
+    });
+    return map;
+  }, [recentResults]);
+
+  const fixtureRows = useMemo(() => {
+    return fixtures.map((fixture, index) => {
+      const matchNo = index + 1;
+      const status = getFixtureStatus(matchNo, matchState, resultsMap);
+      const score = getFixtureScore(matchNo, matchState, resultsMap);
+      return {
+        matchNo,
+        team1: fixture[0],
+        team2: fixture[1],
+        status,
+        score
+      };
+    });
+  }, [matchState, resultsMap]);
 
   const stats = useMemo(() => {
     const goals = teams.reduce((sum, t) => sum + (t.gf || 0), 0);
@@ -462,6 +507,7 @@ export default function App() {
           <div>
             <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button>
             <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
+            <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
             {mode === "admin" && <Button onClick={handleLogout} style={{ background: "linear-gradient(180deg, #dc2626 0%, #991b1b 100%)" }}>Logout</Button>}
           </div>
         </div>
@@ -647,6 +693,53 @@ export default function App() {
               ))}
             </Card>
           </>
+        )}
+
+        {screen === "fixtures" && (
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>All Fixtures Tracker</h2>
+                <div style={{ color: "#aac3ff", marginTop: 6 }}>Shows live score, full-time result, or yet-to-play status for every match.</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[
+                  getStatusPill("LIVE"),
+                  getStatusPill("FT"),
+                  getStatusPill("YET")
+                ].map((pill) => (
+                  <div key={pill.label} style={{ padding: "8px 12px", borderRadius: 999, background: pill.bg, color: pill.color, border: pill.border, fontSize: 12, fontWeight: 800 }}>{pill.label}</div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              {fixtureRows.map((row) => {
+                const pill = getStatusPill(row.status);
+                return (
+                  <div key={row.matchNo} className="ballers-table-row" style={{ display: "grid", gridTemplateColumns: "76px 1fr auto 1fr 170px", gap: 12, alignItems: "center", padding: 14, borderRadius: 16, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontWeight: 800, color: "#d8e4ff" }}>Match {row.matchNo}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <TeamLogo name={row.team1} size={44} rounded={14} />
+                      <div style={{ fontWeight: 700 }}>{row.team1}</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: row.status === "LIVE" ? "#ffb4b4" : "#ffffff" }}>{row.score}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+                      <div style={{ fontWeight: 700, textAlign: "right" }}>{row.team2}</div>
+                      <TeamLogo name={row.team2} size={44} rounded={14} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <div style={{ padding: "9px 12px", borderRadius: 999, background: pill.bg, color: pill.color, border: pill.border, fontSize: 12, fontWeight: 900, minWidth: 120, textAlign: "center" }}>
+                        {pill.label}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         )}
       </div>
 
