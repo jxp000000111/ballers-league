@@ -316,7 +316,7 @@ export default function App() {
   const [showGoalFlash, setShowGoalFlash] = useState(false);
   const [goalPulse, setGoalPulse] = useState({ team: null, visible: false });
   const [fullTimeFlash, setFullTimeFlash] = useState(false);
-  const lastLiveRef = useRef({
+  const liveStateRef = useRef({
     match_index: 0,
     score1: 0,
     score2: 0
@@ -333,6 +333,14 @@ export default function App() {
   useEffect(() => {
     injectStyles();
   }, []);
+
+  useEffect(() => {
+    liveStateRef.current = {
+      match_index: Number(matchState.match_index || 0),
+      score1: Number(matchState.score1 || 0),
+      score2: Number(matchState.score2 || 0)
+    };
+  }, [matchState]);
 
   const fetchData = async () => {
     const [
@@ -354,11 +362,6 @@ export default function App() {
 
     if (stateData) {
       setMatchState(stateData);
-      lastLiveRef.current = {
-        match_index: Number(stateData.match_index || 0),
-        score1: Number(stateData.score1 || 0),
-        score2: Number(stateData.score2 || 0)
-      };
     }
 
     if (resultData) setRecentResults(resultData);
@@ -414,31 +417,41 @@ export default function App() {
         { event: "*", schema: "public", table: "match_state" },
         async (payload) => {
           const newRow = payload.new || {};
-          const oldRow = payload.old || lastLiveRef.current;
+          const prev = liveStateRef.current;
 
-          const oldMatchIndex = Number(oldRow.match_index || 0);
+          const prevMatchIndex = Number(prev.match_index || 0);
+          const prevScore1 = Number(prev.score1 || 0);
+          const prevScore2 = Number(prev.score2 || 0);
+
           const newMatchIndex = Number(newRow.match_index || 0);
-          const oldScore1 = Number(oldRow.score1 || 0);
           const newScore1 = Number(newRow.score1 || 0);
-          const oldScore2 = Number(oldRow.score2 || 0);
           const newScore2 = Number(newRow.score2 || 0);
 
-          if (newMatchIndex === oldMatchIndex) {
-            if (newScore1 > oldScore1) {
+          if (newMatchIndex === prevMatchIndex) {
+            const delta1 = newScore1 - prevScore1;
+            const delta2 = newScore2 - prevScore2;
+
+            if (delta1 > 0 && delta2 <= 0) {
               setGoalPulse({ team: 1, visible: true });
               setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
-            } else if (newScore2 > oldScore2) {
+            } else if (delta2 > 0 && delta1 <= 0) {
+              setGoalPulse({ team: 2, visible: true });
+              setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
+            } else if (delta1 > delta2) {
+              setGoalPulse({ team: 1, visible: true });
+              setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
+            } else if (delta2 > delta1) {
               setGoalPulse({ team: 2, visible: true });
               setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
             }
           }
 
-          if (newMatchIndex > oldMatchIndex) {
+          if (newMatchIndex > prevMatchIndex) {
             setFullTimeFlash(true);
             setTimeout(() => setFullTimeFlash(false), 1800);
           }
 
-          lastLiveRef.current = {
+          liveStateRef.current = {
             match_index: newMatchIndex,
             score1: newScore1,
             score2: newScore2
@@ -981,7 +994,7 @@ export default function App() {
               animation: "goalFlash 1.2s ease-out forwards"
             }}
           >
-            FULL TIME!
+            GOAL UPDATE ⚽
           </div>
         )}
 
@@ -1002,7 +1015,7 @@ export default function App() {
               animation: "fullTimeReveal 1.8s ease-out forwards"
             }}
           >
-            GOAL UPDATE ⚽
+            FULL TIME
           </div>
         )}
 
