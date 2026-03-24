@@ -89,6 +89,17 @@ function injectStyles() {
       80% { opacity: 1; transform: scale(1); }
       100% { opacity: 0; transform: scale(1.08); }
     }
+    @keyframes scorePop {
+      0% { transform: scale(1); opacity: 0.7; }
+      40% { transform: scale(1.35); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes fullTimeReveal {
+      0% { opacity: 0; transform: scale(0.92); }
+      20% { opacity: 1; transform: scale(1.02); }
+      80% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.06); }
+    }
     .ballers-logo-card {
       animation: floatLogo 4.8s ease-in-out infinite, pulseGlow 3.6s ease-in-out infinite;
       transition: transform .25s ease, border-color .25s ease;
@@ -109,6 +120,9 @@ function injectStyles() {
     .ballers-table-row:hover {
       background: rgba(255,255,255,0.03);
       transform: translateX(3px);
+    }
+    .score-pop {
+      animation: scorePop 0.6s ease;
     }
   `;
   document.head.appendChild(style);
@@ -300,6 +314,13 @@ export default function App() {
     final: { team1: "", team2: "", score1: 0, score2: 0, winner: "" }
   });
   const [showGoalFlash, setShowGoalFlash] = useState(false);
+  const [goalPulse, setGoalPulse] = useState({ team: null, visible: false });
+  const [fullTimeFlash, setFullTimeFlash] = useState(false);
+  const [prevLiveScore, setPrevLiveScore] = useState({
+    score1: 0,
+    score2: 0,
+    match_index: 0
+  });
   const [authReady, setAuthReady] = useState(false);
   const [session, setSession] = useState(null);
   const [adminEmail, setAdminEmail] = useState("");
@@ -373,26 +394,34 @@ export default function App() {
     fetchData();
 
     const channel = supabase
-      .channel("ballers-live")
+      .channel("ballers-live-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "teams" },
-        fetchData
+        async () => {
+          await fetchData();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_state" },
-        fetchData
+        async () => {
+          await fetchData();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "results" },
-        fetchData
+        async () => {
+          await fetchData();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "playoffs" },
-        fetchData
+        async () => {
+          await fetchData();
+        }
       )
       .subscribe();
 
@@ -401,6 +430,32 @@ export default function App() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  useEffect(() => {
+    const prev = prevLiveScore;
+    const curr = {
+      score1: Number(matchState.score1 || 0),
+      score2: Number(matchState.score2 || 0),
+      match_index: Number(matchState.match_index || 0)
+    };
+
+    if (curr.match_index === prev.match_index) {
+      if (curr.score1 > prev.score1) {
+        setGoalPulse({ team: 1, visible: true });
+        setTimeout(() => setGoalPulse({ team: null, visible: false }), 700);
+      } else if (curr.score2 > prev.score2) {
+        setGoalPulse({ team: 2, visible: true });
+        setTimeout(() => setGoalPulse({ team: null, visible: false }), 700);
+      }
+    }
+
+    if (curr.match_index > prev.match_index) {
+      setFullTimeFlash(true);
+      setTimeout(() => setFullTimeFlash(false), 1800);
+    }
+
+    setPrevLiveScore(curr);
+  }, [matchState.score1, matchState.score2, matchState.match_index]);
 
   const sorted = useMemo(() => {
     return [...teams].sort(
@@ -440,7 +495,6 @@ export default function App() {
     const avgGoals = matches ? (goals / matches).toFixed(2) : "0.00";
     const bestAttack = [...teams].sort((a, b) => (b.gf || 0) - (a.gf || 0))[0];
     const bestDefense = [...teams].sort((a, b) => (a.ga || 0) - (b.ga || 0))[0];
-
     return { goals, matches, avgGoals, bestAttack, bestDefense };
   }, [teams, recentResults]);
 
@@ -576,10 +630,8 @@ export default function App() {
       .eq("id", 1);
 
     setShowGoalFlash(true);
-
-    setTimeout(() => {
-      window.location.reload();
-    }, 700);
+    setTimeout(() => setShowGoalFlash(false), 1200);
+    await fetchData();
   };
 
   const addOffPitch = async () => {
@@ -733,7 +785,11 @@ export default function App() {
   };
 
   if (mode === "admin" && !authReady) {
-    return <div style={{ ...shell, display: "grid", placeItems: "center" }}>Loading admin...</div>;
+    return (
+      <div style={{ ...shell, display: "grid", placeItems: "center" }}>
+        Loading admin...
+      </div>
+    );
   }
 
   if (mode === "admin" && !session) {
@@ -896,10 +952,31 @@ export default function App() {
               fontWeight: 900,
               color: "#ffe16b",
               letterSpacing: 2,
-              animation: "goalFlash 1.5s ease-out forwards"
+              animation: "goalFlash 1.2s ease-out forwards"
             }}
           >
             GOAL UPDATE ⚽
+          </div>
+        )}
+
+        {fullTimeFlash && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(2,9,28,0.82)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1001,
+              fontSize: 56,
+              fontWeight: 900,
+              color: "#ffe16b",
+              letterSpacing: 2,
+              animation: "fullTimeReveal 1.8s ease-out forwards"
+            }}
+          >
+            FULL TIME
           </div>
         )}
 
@@ -962,14 +1039,27 @@ export default function App() {
                     >
                       <div style={{ textAlign: "center" }}>
                         <div
+                          className={goalPulse.visible && goalPulse.team === 1 ? "score-pop" : ""}
                           style={{
                             fontSize: 34,
                             fontWeight: 900,
-                            color: "#ffffff"
+                            color: "#ffffff",
+                            transition: "transform 0.2s ease"
                           }}
                         >
                           {matchState.score1}
                         </div>
+                        {goalPulse.visible && goalPulse.team === 1 && (
+                          <div
+                            style={{
+                              color: "#91f0b0",
+                              fontWeight: 900,
+                              fontSize: 14
+                            }}
+                          >
+                            +1 GOAL
+                          </div>
+                        )}
                         {mode === "admin" && (
                           <div>
                             <Button
@@ -1000,14 +1090,27 @@ export default function App() {
 
                       <div style={{ textAlign: "center" }}>
                         <div
+                          className={goalPulse.visible && goalPulse.team === 2 ? "score-pop" : ""}
                           style={{
                             fontSize: 34,
                             fontWeight: 900,
-                            color: "#ffffff"
+                            color: "#ffffff",
+                            transition: "transform 0.2s ease"
                           }}
                         >
                           {matchState.score2}
                         </div>
+                        {goalPulse.visible && goalPulse.team === 2 && (
+                          <div
+                            style={{
+                              color: "#91f0b0",
+                              fontWeight: 900,
+                              fontSize: 14
+                            }}
+                          >
+                            +1 GOAL
+                          </div>
+                        )}
                         {mode === "admin" && (
                           <div>
                             <Button
@@ -1433,6 +1536,7 @@ export default function App() {
               ? `${fixtures[matchState.match_index][0]} ${matchState.score1}-${matchState.score2} ${fixtures[matchState.match_index][1]}`
               : "League Stage Completed"}
           </div>
+
           <div
             style={{
               flex: 1,
