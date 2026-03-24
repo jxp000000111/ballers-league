@@ -534,7 +534,7 @@ export default function App() {
             </Card>
 
             <Card>
-              <h2 style={{ marginTop: 0 }}>IPL-Style Playoffs</h2>
+              <h2 style={{ marginTop: 0 }}>Playoffs</h2>
               {playoffStages.map(({ key, label }) => (
                 <div key={key} style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12, marginTop: 12 }}>
                   <h3>{label}</h3>
