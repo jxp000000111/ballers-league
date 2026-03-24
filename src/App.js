@@ -429,7 +429,7 @@ export default function App() {
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
           <div>
-            <h1 style={{ margin: 0, letterSpacing: 1 }}>BALLERS LEAGUE MATCHDAY SYSTEM</h1>
+            <h1 style={{ margin: 0, letterSpacing: 1 }}>BALLERS LEAGUE VOL:II - LEAGUE STANDINGS</h1>
             <div style={{ color: "#b6c3e7", marginTop: 6 }}>{mode === "admin" ? "Admin Control Room" : "Viewer Broadcast Mode"}</div>
           </div>
           <div>
