@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
 const fixtures = [
@@ -316,10 +316,10 @@ export default function App() {
   const [showGoalFlash, setShowGoalFlash] = useState(false);
   const [goalPulse, setGoalPulse] = useState({ team: null, visible: false });
   const [fullTimeFlash, setFullTimeFlash] = useState(false);
-  const [prevLiveScore, setPrevLiveScore] = useState({
+  const lastLiveRef = useRef({
+    match_index: 0,
     score1: 0,
-    score2: 0,
-    match_index: 0
+    score2: 0
   });
   const [authReady, setAuthReady] = useState(false);
   const [session, setSession] = useState(null);
@@ -352,7 +352,14 @@ export default function App() {
       if (teamsData.length && !selectedTeam) setSelectedTeam(teamsData[0].name);
     }
 
-    if (stateData) setMatchState(stateData);
+    if (stateData) {
+      setMatchState(stateData);
+      lastLiveRef.current = {
+        match_index: Number(stateData.match_index || 0),
+        score1: Number(stateData.score1 || 0),
+        score2: Number(stateData.score2 || 0)
+      };
+    }
 
     if (resultData) setRecentResults(resultData);
 
@@ -379,100 +386,102 @@ export default function App() {
   };
 
   useEffect(() => {
-  let mounted = true;
+    let mounted = true;
 
-  const init = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!mounted) return;
-    setSession(data.session || null);
-    setAuthReady(true);
-    await fetchData();
-  };
-
-  init();
-
-  const { data: authListener } = supabase.auth.onAuthStateChange(
-    (_event, nextSession) => {
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      setSession(nextSession || null);
+
+      setSession(data.session || null);
       setAuthReady(true);
-    }
-  );
-
-  const channel = supabase
-    .channel("ballers-live-realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "match_state" },
-      async (payload) => {
-        console.log("match_state changed", payload);
-        if (!mounted) return;
-        await fetchData();
-      }
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "results" },
-      async (payload) => {
-        console.log("results changed", payload);
-        if (!mounted) return;
-        await fetchData();
-      }
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "teams" },
-      async (payload) => {
-        console.log("teams changed", payload);
-        if (!mounted) return;
-        await fetchData();
-      }
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "playoffs" },
-      async (payload) => {
-        console.log("playoffs changed", payload);
-        if (!mounted) return;
-        await fetchData();
-      }
-    )
-    .subscribe((status) => {
-      console.log("Realtime status:", status);
-    });
-
-  return () => {
-    mounted = false;
-    authListener?.subscription?.unsubscribe();
-    supabase.removeChannel(channel);
-  };
-}, []);
-
-  useEffect(() => {
-    const prev = prevLiveScore;
-    const curr = {
-      score1: Number(matchState.score1 || 0),
-      score2: Number(matchState.score2 || 0),
-      match_index: Number(matchState.match_index || 0)
+      await fetchData();
     };
 
-    if (curr.match_index === prev.match_index) {
-      if (curr.score1 > prev.score1) {
-        setGoalPulse({ team: 1, visible: true });
-        setTimeout(() => setGoalPulse({ team: null, visible: false }), 700);
-      } else if (curr.score2 > prev.score2) {
-        setGoalPulse({ team: 2, visible: true });
-        setTimeout(() => setGoalPulse({ team: null, visible: false }), 700);
+    init();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        if (!mounted) return;
+        setSession(nextSession || null);
+        setAuthReady(true);
       }
-    }
+    );
 
-    if (curr.match_index > prev.match_index) {
-      setFullTimeFlash(true);
-      setTimeout(() => setFullTimeFlash(false), 1800);
-    }
+    const channel = supabase
+      .channel("ballers-live-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "match_state" },
+        async (payload) => {
+          const newRow = payload.new || {};
+          const oldRow = payload.old || lastLiveRef.current;
 
-    setPrevLiveScore(curr);
-  }, [matchState.score1, matchState.score2, matchState.match_index]);
+          const oldMatchIndex = Number(oldRow.match_index || 0);
+          const newMatchIndex = Number(newRow.match_index || 0);
+          const oldScore1 = Number(oldRow.score1 || 0);
+          const newScore1 = Number(newRow.score1 || 0);
+          const oldScore2 = Number(oldRow.score2 || 0);
+          const newScore2 = Number(newRow.score2 || 0);
+
+          if (newMatchIndex === oldMatchIndex) {
+            if (newScore1 > oldScore1) {
+              setGoalPulse({ team: 1, visible: true });
+              setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
+            } else if (newScore2 > oldScore2) {
+              setGoalPulse({ team: 2, visible: true });
+              setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
+            }
+          }
+
+          if (newMatchIndex > oldMatchIndex) {
+            setFullTimeFlash(true);
+            setTimeout(() => setFullTimeFlash(false), 1800);
+          }
+
+          lastLiveRef.current = {
+            match_index: newMatchIndex,
+            score1: newScore1,
+            score2: newScore2
+          };
+
+          if (!mounted) return;
+          await fetchData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "results" },
+        async () => {
+          if (!mounted) return;
+          await fetchData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "teams" },
+        async () => {
+          if (!mounted) return;
+          await fetchData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "playoffs" },
+        async () => {
+          if (!mounted) return;
+          await fetchData();
+        }
+      )
+      .subscribe((status) => {
+        console.log("Realtime status:", status);
+      });
+
+    return () => {
+      mounted = false;
+      authListener?.subscription?.unsubscribe();
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const sorted = useMemo(() => {
     return [...teams].sort(
