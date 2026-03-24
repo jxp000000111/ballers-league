@@ -320,6 +320,26 @@ function safeName(id, playersMap) {
   return playersMap[id]?.name || "-";
 }
 
+function upsertById(list, row) {
+  const idx = list.findIndex((x) => Number(x.id) === Number(row.id));
+  if (idx === -1) return [row, ...list];
+  const next = [...list];
+  next[idx] = row;
+  return next;
+}
+
+function removeById(list, id) {
+  return list.filter((x) => Number(x.id) !== Number(id));
+}
+
+function upsertByKey(list, row, key) {
+  const idx = list.findIndex((x) => String(x[key]) === String(row[key]));
+  if (idx === -1) return [row, ...list];
+  const next = [...list];
+  next[idx] = row;
+  return next;
+}
+
 export default function App() {
   const [teams, setTeams] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -352,6 +372,10 @@ export default function App() {
   const [team1Assist, setTeam1Assist] = useState("");
   const [team2Scorer, setTeam2Scorer] = useState("");
   const [team2Assist, setTeam2Assist] = useState("");
+
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [editScorerId, setEditScorerId] = useState("");
+  const [editAssistId, setEditAssistId] = useState("");
 
   const liveStateRef = useRef({
     match_index: 0,
@@ -403,11 +427,7 @@ export default function App() {
       setTeams(teamsData);
       if (teamsData.length && !selectedTeam) setSelectedTeam(teamsData[0].name);
     }
-
-    if (stateData) {
-      setMatchState(stateData);
-    }
-
+    if (stateData) setMatchState(stateData);
     if (resultData) setRecentResults(resultData);
     if (playersData) setPlayers(playersData);
     if (goalEventsData) setGoalEvents(goalEventsData);
@@ -420,7 +440,6 @@ export default function App() {
         qualifier2: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
         final: { team1: "", team2: "", score1: 0, score2: 0, winner: "" }
       };
-
       playoffData.forEach((row) => {
         next[row.stage] = {
           team1: row.team1 || "",
@@ -430,7 +449,6 @@ export default function App() {
           winner: row.winner || ""
         };
       });
-
       setPlayoffs(next);
     }
   };
@@ -441,7 +459,6 @@ export default function App() {
     const init = async () => {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-
       setSession(data.session || null);
       setAuthReady(true);
       await fetchData();
@@ -458,11 +475,12 @@ export default function App() {
     );
 
     const channel = supabase
-      .channel("ballers-live-realtime")
+      .channel("ballers-live-realtime-fast")
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_state" },
-        async (payload) => {
+        (payload) => {
           const newRow = payload.new || {};
           const prev = liveStateRef.current;
 
@@ -484,12 +502,6 @@ export default function App() {
             } else if (delta2 > 0 && delta1 <= 0) {
               setGoalPulse({ team: 2, visible: true });
               setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
-            } else if (delta1 > delta2) {
-              setGoalPulse({ team: 1, visible: true });
-              setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
-            } else if (delta2 > delta1) {
-              setGoalPulse({ team: 2, visible: true });
-              setTimeout(() => setGoalPulse({ team: null, visible: false }), 900);
             }
           }
 
@@ -504,50 +516,87 @@ export default function App() {
             score2: newScore2
           };
 
-          if (!mounted) return;
-          await fetchData();
+          setMatchState((prevState) => ({ ...prevState, ...newRow }));
         }
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "results" },
-        async () => {
-          if (!mounted) return;
-          await fetchData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "teams" },
-        async () => {
-          if (!mounted) return;
-          await fetchData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "playoffs" },
-        async () => {
-          if (!mounted) return;
-          await fetchData();
-        }
-      )
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "goal_events" },
-        async () => {
-          if (!mounted) return;
-          await fetchData();
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setGoalEvents((prev) => upsertById(prev, payload.new));
+          } else if (payload.eventType === "UPDATE") {
+            setGoalEvents((prev) => upsertById(prev, payload.new));
+          } else if (payload.eventType === "DELETE") {
+            setGoalEvents((prev) => removeById(prev, payload.old.id));
+          }
         }
       )
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "clean_sheet_events" },
-        async () => {
-          if (!mounted) return;
-          await fetchData();
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setCleanSheetEvents((prev) => upsertById(prev, payload.new));
+          } else if (payload.eventType === "UPDATE") {
+            setCleanSheetEvents((prev) => upsertById(prev, payload.new));
+          } else if (payload.eventType === "DELETE") {
+            setCleanSheetEvents((prev) => removeById(prev, payload.old.id));
+          }
         }
       )
+
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "teams" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setTeams((prev) => upsertById(prev, payload.new));
+          } else if (payload.eventType === "UPDATE") {
+            setTeams((prev) => upsertById(prev, payload.new));
+          } else if (payload.eventType === "DELETE") {
+            setTeams((prev) => removeById(prev, payload.old.id));
+          }
+        }
+      )
+
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "results" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setRecentResults((prev) => upsertByKey(prev, payload.new, "match_no"));
+          } else if (payload.eventType === "UPDATE") {
+            setRecentResults((prev) => upsertByKey(prev, payload.new, "match_no"));
+          } else if (payload.eventType === "DELETE") {
+            setRecentResults((prev) =>
+              prev.filter((x) => Number(x.id) !== Number(payload.old.id))
+            );
+          }
+        }
+      )
+
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "playoffs" },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            setPlayoffs((prev) => ({
+              ...prev,
+              [payload.new.stage]: {
+                team1: payload.new.team1 || "",
+                team2: payload.new.team2 || "",
+                score1: payload.new.score1 || 0,
+                score2: payload.new.score2 || 0,
+                winner: payload.new.winner || ""
+              }
+            }));
+          }
+        }
+      )
+
       .subscribe((status) => {
         console.log("Realtime status:", status);
       });
@@ -578,15 +627,12 @@ export default function App() {
   const fixtureRows = useMemo(() => {
     return fixtures.map((fixture, index) => {
       const matchNo = index + 1;
-      const status = getFixtureStatus(matchNo, matchState, resultsMap);
-      const score = getFixtureScore(matchNo, matchState, resultsMap);
-
       return {
         matchNo,
         team1: fixture[0],
         team2: fixture[1],
-        status,
-        score
+        status: getFixtureStatus(matchNo, matchState, resultsMap),
+        score: getFixtureScore(matchNo, matchState, resultsMap)
       };
     });
   }, [matchState, resultsMap]);
@@ -613,54 +659,35 @@ export default function App() {
   const team2Name = currentFixture[1];
 
   const team1Outfield = useMemo(
-    () =>
-      players.filter(
-        (p) => p.team_name === team1Name && p.position === "outfield"
-      ),
+    () => players.filter((p) => p.team_name === team1Name && p.position === "outfield"),
     [players, team1Name]
   );
 
   const team2Outfield = useMemo(
-    () =>
-      players.filter(
-        (p) => p.team_name === team2Name && p.position === "outfield"
-      ),
+    () => players.filter((p) => p.team_name === team2Name && p.position === "outfield"),
     [players, team2Name]
   );
 
   const outfieldStats = useMemo(() => {
     return players
       .filter((p) => p.position === "outfield")
-      .map((player) => {
-        const goals = goalEvents.filter(
-          (g) => Number(g.scorer_id) === Number(player.id)
-        ).length;
-        const assists = goalEvents.filter(
-          (g) => Number(g.assist_id) === Number(player.id)
-        ).length;
-
-        return {
-          ...player,
-          goals,
-          assists
-        };
-      })
+      .map((player) => ({
+        ...player,
+        goals: goalEvents.filter((g) => Number(g.scorer_id) === Number(player.id)).length,
+        assists: goalEvents.filter((g) => Number(g.assist_id) === Number(player.id)).length
+      }))
       .sort((a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name));
   }, [players, goalEvents]);
 
   const goalkeeperStats = useMemo(() => {
     return players
       .filter((p) => p.position === "goalkeeper")
-      .map((player) => {
-        const cleanSheets = cleanSheetEvents.filter(
+      .map((player) => ({
+        ...player,
+        cleanSheets: cleanSheetEvents.filter(
           (c) => Number(c.goalkeeper_id) === Number(player.id)
-        ).length;
-
-        return {
-          ...player,
-          cleanSheets
-        };
-      })
+        ).length
+      }))
       .sort((a, b) => b.cleanSheets - a.cleanSheets || a.name.localeCompare(b.name));
   }, [players, cleanSheetEvents]);
 
@@ -669,7 +696,7 @@ export default function App() {
     return goalEvents
       .filter((g) => Number(g.match_no) === Number(currentMatchNo))
       .slice()
-      .reverse();
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   }, [goalEvents, matchState.match_index]);
 
   const handleLogin = async () => {
@@ -688,23 +715,15 @@ export default function App() {
 
   const addGoalEvent = async ({ teamName, scorerId, assistId, side }) => {
     if (mode !== "admin" || !session) return;
-    if (!scorerId) {
-      alert("Please select a scorer.");
-      return;
-    }
+    if (!scorerId) return alert("Please select a scorer.");
     if (assistId && Number(assistId) === Number(scorerId)) {
-      alert("Scorer and assist cannot be the same player.");
-      return;
+      return alert("Scorer and assist cannot be the same player.");
     }
 
     const nextScore1 =
-      side === 1
-        ? Number(matchState.score1 || 0) + 1
-        : Number(matchState.score1 || 0);
+      side === 1 ? Number(matchState.score1 || 0) + 1 : Number(matchState.score1 || 0);
     const nextScore2 =
-      side === 2
-        ? Number(matchState.score2 || 0) + 1
-        : Number(matchState.score2 || 0);
+      side === 2 ? Number(matchState.score2 || 0) + 1 : Number(matchState.score2 || 0);
 
     await supabase.from("goal_events").insert({
       match_no: matchState.match_index + 1,
@@ -729,12 +748,72 @@ export default function App() {
       setTeam2Scorer("");
       setTeam2Assist("");
     }
+  };
 
-    await fetchData();
+  const startEditGoal = (event) => {
+    setEditingGoalId(event.id);
+    setEditScorerId(String(event.scorer_id || ""));
+    setEditAssistId(event.assist_id ? String(event.assist_id) : "");
+  };
+
+  const cancelEditGoal = () => {
+    setEditingGoalId(null);
+    setEditScorerId("");
+    setEditAssistId("");
+  };
+
+  const saveGoalEdit = async (event) => {
+    if (mode !== "admin" || !session) return;
+    if (!editScorerId) return alert("Please select a scorer.");
+    if (editAssistId && Number(editAssistId) === Number(editScorerId)) {
+      return alert("Scorer and assist cannot be the same player.");
+    }
+
+    await supabase
+      .from("goal_events")
+      .update({
+        scorer_id: Number(editScorerId),
+        assist_id: editAssistId ? Number(editAssistId) : null
+      })
+      .eq("id", event.id);
+
+    cancelEditGoal();
+  };
+
+  const deleteGoalEvent = async (event) => {
+    if (mode !== "admin" || !session) return;
+    const side = event.team_name === team1Name ? 1 : 2;
+
+    const nextScore1 =
+      side === 1
+        ? Math.max(0, Number(matchState.score1 || 0) - 1)
+        : Number(matchState.score1 || 0);
+    const nextScore2 =
+      side === 2
+        ? Math.max(0, Number(matchState.score2 || 0) - 1)
+        : Number(matchState.score2 || 0);
+
+    await supabase.from("goal_events").delete().eq("id", event.id);
+
+    await supabase
+      .from("match_state")
+      .update({
+        score1: nextScore1,
+        score2: nextScore2,
+        ticker: `LIVE • ${team1Name} ${nextScore1}-${nextScore2} ${team2Name}`
+      })
+      .eq("id", 1);
+
+    if (editingGoalId === event.id) cancelEditGoal();
   };
 
   const resetLiveScore = async () => {
     if (mode !== "admin" || !session) return;
+
+    await supabase
+      .from("goal_events")
+      .delete()
+      .eq("match_no", matchState.match_index + 1);
 
     await supabase
       .from("match_state")
@@ -748,12 +827,11 @@ export default function App() {
       })
       .eq("id", 1);
 
-    await supabase
-      .from("goal_events")
-      .delete()
-      .eq("match_no", matchState.match_index + 1);
-
-    await fetchData();
+    cancelEditGoal();
+    setTeam1Scorer("");
+    setTeam1Assist("");
+    setTeam2Scorer("");
+    setTeam2Assist("");
   };
 
   const updateScore = async () => {
@@ -772,12 +850,7 @@ export default function App() {
 
       let pts = t.pts;
       if (s1 === s2) pts += 1;
-      else if (
-        (t.name === t1 && s1 > s2) ||
-        (t.name === t2 && s2 > s1)
-      ) {
-        pts += 3;
-      }
+      else if ((t.name === t1 && s1 > s2) || (t.name === t2 && s2 > s1)) pts += 3;
 
       return {
         ...t,
@@ -812,8 +885,7 @@ export default function App() {
           team2: t2,
           score1: s1,
           score2: s2,
-          result_text:
-            s1 === s2 ? "Draw" : s1 > s2 ? `${t1} won` : `${t2} won`
+          result_text: s1 === s2 ? "Draw" : s1 > s2 ? `${t1} won` : `${t2} won`
         },
         { onConflict: "match_no" }
       );
@@ -854,12 +926,11 @@ export default function App() {
     setShowGoalFlash(true);
     setTimeout(() => setShowGoalFlash(false), 1200);
 
+    cancelEditGoal();
     setTeam1Scorer("");
     setTeam1Assist("");
     setTeam2Scorer("");
     setTeam2Assist("");
-
-    await fetchData();
   };
 
   const addOffPitch = async () => {
@@ -881,8 +952,6 @@ export default function App() {
         ticker: `${selectedTeam} earned ${bonusPoints} off-pitch points`
       })
       .eq("id", 1);
-
-    await fetchData();
   };
 
   const seedPlayoffs = async () => {
@@ -914,8 +983,6 @@ export default function App() {
       .from("match_state")
       .update({ ticker: "Playoffs seeded from top 4" })
       .eq("id", 1);
-
-    await fetchData();
   };
 
   const updatePlayoffField = (stage, field, value) => {
@@ -938,16 +1005,14 @@ export default function App() {
     if (stage === "qualifier1" && playoffs.eliminator.winner) {
       const loser = Number(row.score1) >= Number(row.score2) ? row.team2 : row.team1;
       await supabase.from("playoffs").upsert(
-        [
-          {
-            stage: "qualifier2",
-            team1: loser,
-            team2: playoffs.eliminator.winner,
-            score1: 0,
-            score2: 0,
-            winner: ""
-          }
-        ],
+        [{
+          stage: "qualifier2",
+          team1: loser,
+          team2: playoffs.eliminator.winner,
+          score1: 0,
+          score2: 0,
+          winner: ""
+        }],
         { onConflict: "stage" }
       );
     }
@@ -961,16 +1026,14 @@ export default function App() {
         const q1Loser = q1Winner === q1.team1 ? q1.team2 : q1.team1;
 
         await supabase.from("playoffs").upsert(
-          [
-            {
-              stage: "qualifier2",
-              team1: q1Loser,
-              team2: winner,
-              score1: 0,
-              score2: 0,
-              winner: ""
-            }
-          ],
+          [{
+            stage: "qualifier2",
+            team1: q1Loser,
+            team2: winner,
+            score1: 0,
+            score2: 0,
+            winner: ""
+          }],
           { onConflict: "stage" }
         );
       }
@@ -983,16 +1046,14 @@ export default function App() {
         (Number(q1.score1) >= Number(q1.score2) ? q1.team1 : q1.team2);
 
       await supabase.from("playoffs").upsert(
-        [
-          {
-            stage: "final",
-            team1: finalTeam1,
-            team2: winner,
-            score1: 0,
-            score2: 0,
-            winner: ""
-          }
-        ],
+        [{
+          stage: "final",
+          team1: finalTeam1,
+          team2: winner,
+          score1: 0,
+          score2: 0,
+          winner: ""
+        }],
         { onConflict: "stage" }
       );
     }
@@ -1003,21 +1064,13 @@ export default function App() {
         ticker:
           stage === "final"
             ? `🏆 Champions: ${winner}`
-            : `${
-                playoffStages.find((s) => s.key === stage)?.label
-              } completed • ${winner} advanced`
+            : `${playoffStages.find((s) => s.key === stage)?.label} completed • ${winner} advanced`
       })
       .eq("id", 1);
-
-    await fetchData();
   };
 
   if (mode === "admin" && !authReady) {
-    return (
-      <div style={{ ...shell, display: "grid", placeItems: "center" }}>
-        Loading admin...
-      </div>
-    );
+    return <div style={{ ...shell, display: "grid", placeItems: "center" }}>Loading admin...</div>;
   }
 
   if (mode === "admin" && !session) {
@@ -1047,67 +1100,19 @@ export default function App() {
           }}
         >
           <div>
-            <h1 style={{ margin: 0, letterSpacing: 1 }}>
-              BALLERS LEAGUE MATCHDAY SYSTEM
-            </h1>
+            <h1 style={{ margin: 0, letterSpacing: 1 }}>BALLERS LEAGUE MATCHDAY SYSTEM</h1>
             <div style={{ color: "#b6c3e7", marginTop: 6 }}>
               {mode === "admin" ? "Admin Control Room" : "Viewer Broadcast Mode"}
             </div>
           </div>
 
           <div>
-            <Button
-              onClick={() => setScreen("control")}
-              style={{
-                background:
-                  screen === "control"
-                    ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)"
-                    : "#173563"
-              }}
-            >
-              Control Room
-            </Button>
-            <Button
-              onClick={() => setScreen("stats")}
-              style={{
-                background:
-                  screen === "stats"
-                    ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)"
-                    : "#173563"
-              }}
-            >
-              Stats Screen
-            </Button>
-            <Button
-              onClick={() => setScreen("fixtures")}
-              style={{
-                background:
-                  screen === "fixtures"
-                    ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)"
-                    : "#173563"
-              }}
-            >
-              All Fixtures
-            </Button>
-            <Button
-              onClick={() => setScreen("players")}
-              style={{
-                background:
-                  screen === "players"
-                    ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)"
-                    : "#173563"
-              }}
-            >
-              Player Stats
-            </Button>
+            <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button>
+            <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
+            <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
+            <Button onClick={() => setScreen("players")} style={{ background: screen === "players" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Player Stats</Button>
             {mode === "admin" && (
-              <Button
-                onClick={handleLogout}
-                style={{
-                  background:
-                    "linear-gradient(180deg, #dc2626 0%, #991b1b 100%)"
-                }}
-              >
+              <Button onClick={handleLogout} style={{ background: "linear-gradient(180deg, #dc2626 0%, #991b1b 100%)" }}>
                 Logout
               </Button>
             )}
@@ -1125,23 +1130,14 @@ export default function App() {
             }}
           >
             <div>
-              <div
-                style={{
-                  fontSize: 14,
-                  color: "#aac3ff",
-                  textTransform: "uppercase",
-                  letterSpacing: 1.5
-                }}
-              >
+              <div style={{ fontSize: 14, color: "#aac3ff", textTransform: "uppercase", letterSpacing: 1.5 }}>
                 League Identities
               </div>
               <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>
                 Animated Team Logo Strip
               </div>
             </div>
-            <div style={{ color: "#c9d8ff" }}>
-              Dark blue broadcast theme enabled
-            </div>
+            <div style={{ color: "#c9d8ff" }}>Dark blue broadcast theme enabled</div>
           </div>
 
           <div
@@ -1157,8 +1153,7 @@ export default function App() {
                 key={team}
                 className="ballers-logo-card"
                 style={{
-                  background:
-                    "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
                   border: "1px solid rgba(255,255,255,0.1)",
                   borderRadius: 18,
                   padding: 14,
@@ -1169,9 +1164,7 @@ export default function App() {
                 <div style={{ display: "grid", placeItems: "center", minHeight: 88 }}>
                   <TeamLogo name={team} size={78} rounded={20} />
                 </div>
-                <div style={{ marginTop: 10, fontWeight: 700, color: "#e6eeff" }}>
-                  {team}
-                </div>
+                <div style={{ marginTop: 10, fontWeight: 700, color: "#e6eeff" }}>{team}</div>
               </div>
             ))}
           </div>
@@ -1221,13 +1214,7 @@ export default function App() {
 
         {screen === "control" && (
           <>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                gap: 16
-              }}
-            >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
               <Card>
                 <h2 style={{ marginTop: 0 }}>Current Match</h2>
 
@@ -1249,17 +1236,8 @@ export default function App() {
 
                       <div style={{ color: "#8eb0ff", fontWeight: 800 }}>VS</div>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          justifyContent: "flex-end"
-                        }}
-                      >
-                        <div style={{ fontWeight: 800, textAlign: "right" }}>
-                          {team2Name}
-                        </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+                        <div style={{ fontWeight: 800, textAlign: "right" }}>{team2Name}</div>
                         <TeamLogo name={team2Name} size={56} />
                       </div>
                     </div>
@@ -1277,103 +1255,47 @@ export default function App() {
                       <div style={{ textAlign: "center" }}>
                         <div
                           className={goalPulse.visible && goalPulse.team === 1 ? "score-pop" : ""}
-                          style={{
-                            fontSize: 34,
-                            fontWeight: 900,
-                            color: "#ffffff",
-                            transition: "transform 0.2s ease"
-                          }}
+                          style={{ fontSize: 34, fontWeight: 900, color: "#ffffff" }}
                         >
                           {matchState.score1}
                         </div>
                         {goalPulse.visible && goalPulse.team === 1 && (
-                          <div
-                            style={{
-                              color: "#91f0b0",
-                              fontWeight: 900,
-                              fontSize: 14
-                            }}
-                          >
-                            +1 GOAL
-                          </div>
+                          <div style={{ color: "#91f0b0", fontWeight: 900, fontSize: 14 }}>+1 GOAL</div>
                         )}
                       </div>
 
-                      <div
-                        style={{
-                          textAlign: "center",
-                          color: "#8eb0ff",
-                          fontWeight: 800
-                        }}
-                      >
+                      <div style={{ textAlign: "center", color: "#8eb0ff", fontWeight: 800 }}>
                         LIVE
                       </div>
 
                       <div style={{ textAlign: "center" }}>
                         <div
                           className={goalPulse.visible && goalPulse.team === 2 ? "score-pop" : ""}
-                          style={{
-                            fontSize: 34,
-                            fontWeight: 900,
-                            color: "#ffffff",
-                            transition: "transform 0.2s ease"
-                          }}
+                          style={{ fontSize: 34, fontWeight: 900, color: "#ffffff" }}
                         >
                           {matchState.score2}
                         </div>
                         {goalPulse.visible && goalPulse.team === 2 && (
-                          <div
-                            style={{
-                              color: "#91f0b0",
-                              fontWeight: 900,
-                              fontSize: 14
-                            }}
-                          >
-                            +1 GOAL
-                          </div>
+                          <div style={{ color: "#91f0b0", fontWeight: 900, fontSize: 14 }}>+1 GOAL</div>
                         )}
                       </div>
                     </div>
 
                     <br />
 
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-                        gap: 16
-                      }}
-                    >
-                      <div
-                        style={{
-                          background: "rgba(255,255,255,0.03)",
-                          padding: 12,
-                          borderRadius: 14
-                        }}
-                      >
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 16 }}>
+                      <div style={{ background: "rgba(255,255,255,0.03)", padding: 12, borderRadius: 14 }}>
                         <h3 style={{ marginTop: 0 }}>{team1Name} Goal Entry</h3>
-                        <Select
-                          value={team1Scorer}
-                          onChange={(e) => setTeam1Scorer(e.target.value)}
-                          disabled={mode !== "admin"}
-                        >
+                        <Select value={team1Scorer} onChange={(e) => setTeam1Scorer(e.target.value)} disabled={mode !== "admin"}>
                           <option value="">Select scorer</option>
                           {team1Outfield.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
+                            <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </Select>
-                        <Select
-                          value={team1Assist}
-                          onChange={(e) => setTeam1Assist(e.target.value)}
-                          disabled={mode !== "admin"}
-                        >
+                        <Select value={team1Assist} onChange={(e) => setTeam1Assist(e.target.value)} disabled={mode !== "admin"}>
                           <option value="">Select assist (optional)</option>
                           {team1Outfield.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
+                            <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </Select>
                         {mode === "admin" && (
@@ -1392,36 +1314,18 @@ export default function App() {
                         )}
                       </div>
 
-                      <div
-                        style={{
-                          background: "rgba(255,255,255,0.03)",
-                          padding: 12,
-                          borderRadius: 14
-                        }}
-                      >
+                      <div style={{ background: "rgba(255,255,255,0.03)", padding: 12, borderRadius: 14 }}>
                         <h3 style={{ marginTop: 0 }}>{team2Name} Goal Entry</h3>
-                        <Select
-                          value={team2Scorer}
-                          onChange={(e) => setTeam2Scorer(e.target.value)}
-                          disabled={mode !== "admin"}
-                        >
+                        <Select value={team2Scorer} onChange={(e) => setTeam2Scorer(e.target.value)} disabled={mode !== "admin"}>
                           <option value="">Select scorer</option>
                           {team2Outfield.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
+                            <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </Select>
-                        <Select
-                          value={team2Assist}
-                          onChange={(e) => setTeam2Assist(e.target.value)}
-                          disabled={mode !== "admin"}
-                        >
+                        <Select value={team2Assist} onChange={(e) => setTeam2Assist(e.target.value)} disabled={mode !== "admin"}>
                           <option value="">Select assist (optional)</option>
                           {team2Outfield.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
+                            <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </Select>
                         {mode === "admin" && (
@@ -1446,18 +1350,13 @@ export default function App() {
                     <div>
                       {mode === "admin" ? (
                         <>
-                          <Button
-                            onClick={resetLiveScore}
-                            style={{ background: "#173563" }}
-                          >
+                          <Button onClick={resetLiveScore} style={{ background: "#173563" }}>
                             Reset Match Goals
                           </Button>
                           <Button onClick={updateScore}>Submit Full Time Score</Button>
                         </>
                       ) : (
-                        <div style={{ color: "#9bb3e4" }}>
-                          Viewer mode cannot edit scores.
-                        </div>
+                        <div style={{ color: "#9bb3e4" }}>Viewer mode cannot edit scores.</div>
                       )}
                     </div>
                   </>
@@ -1471,21 +1370,65 @@ export default function App() {
                 {currentMatchGoalEvents.length === 0 ? (
                   <div style={{ color: "#b6c3e7" }}>No goals added yet.</div>
                 ) : (
-                  currentMatchGoalEvents.map((event, index) => (
-                    <div
-                      key={event.id}
-                      style={{
-                        padding: "10px 0",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)"
-                      }}
-                    >
-                      <strong>{index + 1}.</strong> {event.team_name} —{" "}
-                      <strong>{safeName(event.scorer_id, playersMap)}</strong>
-                      {event.assist_id
-                        ? ` (Assist: ${safeName(event.assist_id, playersMap)})`
-                        : " (Unassisted)"}
-                    </div>
-                  ))
+                  currentMatchGoalEvents.map((event, index) => {
+                    const editPool =
+                      event.team_name === team1Name ? team1Outfield : team2Outfield;
+                    const isEditing = editingGoalId === event.id;
+
+                    return (
+                      <div
+                        key={event.id}
+                        style={{
+                          padding: "10px 0",
+                          borderBottom: "1px solid rgba(255,255,255,0.06)"
+                        }}
+                      >
+                        {!isEditing ? (
+                          <>
+                            <strong>{index + 1}.</strong> {event.team_name} —{" "}
+                            <strong>{safeName(event.scorer_id, playersMap)}</strong>
+                            {event.assist_id
+                              ? ` (Assist: ${safeName(event.assist_id, playersMap)})`
+                              : " (Unassisted)"}
+                            {mode === "admin" && (
+                              <div style={{ marginTop: 8 }}>
+                                <Button onClick={() => startEditGoal(event)} style={{ background: "#173563" }}>
+                                  Edit
+                                </Button>
+                                <Button onClick={() => deleteGoalEvent(event)} style={{ background: "#991b1b" }}>
+                                  Delete
+                                </Button>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ marginBottom: 8, fontWeight: 700 }}>
+                              Editing goal for {event.team_name}
+                            </div>
+                            <Select value={editScorerId} onChange={(e) => setEditScorerId(e.target.value)}>
+                              <option value="">Select scorer</option>
+                              {editPool.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </Select>
+                            <Select value={editAssistId} onChange={(e) => setEditAssistId(e.target.value)}>
+                              <option value="">Select assist (optional)</option>
+                              {editPool.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </Select>
+                            <div style={{ marginTop: 8 }}>
+                              <Button onClick={() => saveGoalEdit(event)}>Save</Button>
+                              <Button onClick={cancelEditGoal} style={{ background: "#173563" }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </Card>
             </div>
@@ -1495,26 +1438,14 @@ export default function App() {
               <select
                 value={selectedTeam}
                 onChange={(e) => setSelectedTeam(e.target.value)}
-                style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  marginRight: 10,
-                  background: "#fff"
-                }}
+                style={{ padding: 10, borderRadius: 10, marginRight: 10, background: "#fff" }}
                 disabled={mode !== "admin"}
               >
                 {teams.map((t) => (
-                  <option key={t.name} value={t.name}>
-                    {t.name}
-                  </option>
+                  <option key={t.name} value={t.name}>{t.name}</option>
                 ))}
               </select>
-              <Input
-                type="number"
-                value={bonusPoints}
-                onChange={(e) => setBonusPoints(Number(e.target.value))}
-                disabled={mode !== "admin"}
-              />
+              <Input type="number" value={bonusPoints} onChange={(e) => setBonusPoints(Number(e.target.value))} disabled={mode !== "admin"} />
               <br />
               {mode === "admin" ? (
                 <Button onClick={addOffPitch}>Add Off-Pitch Points</Button>
@@ -1534,9 +1465,7 @@ export default function App() {
                 }}
               >
                 <h2 style={{ margin: 0 }}>Leaderboard</h2>
-                {mode === "admin" && (
-                  <Button onClick={seedPlayoffs}>Seed Playoffs From Top 4</Button>
-                )}
+                {mode === "admin" && <Button onClick={seedPlayoffs}>Seed Playoffs From Top 4</Button>}
               </div>
 
               {sorted.map((t, i) => (
@@ -1552,12 +1481,7 @@ export default function App() {
                     borderBottom: "1px solid rgba(255,255,255,0.06)"
                   }}
                 >
-                  <div
-                    style={{
-                      fontWeight: 800,
-                      color: i < 4 ? "#7bb0ff" : "#cbd8ff"
-                    }}
-                  >
+                  <div style={{ fontWeight: 800, color: i < 4 ? "#7bb0ff" : "#cbd8ff" }}>
                     {i + 1}
                   </div>
                   <TeamLogo name={t.name} size={48} rounded={14} />
@@ -1595,53 +1519,24 @@ export default function App() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {playoffs[key].team1 ? (
-                        <TeamLogo name={playoffs[key].team1} size={42} />
-                      ) : null}
+                      {playoffs[key].team1 ? <TeamLogo name={playoffs[key].team1} size={42} /> : null}
                       <span>{playoffs[key].team1 || "TBD"}</span>
                     </div>
 
                     <span style={{ color: "#8eb0ff" }}>VS</span>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        justifyContent: "flex-end"
-                      }}
-                    >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
                       <span>{playoffs[key].team2 || "TBD"}</span>
-                      {playoffs[key].team2 ? (
-                        <TeamLogo name={playoffs[key].team2} size={42} />
-                      ) : null}
+                      {playoffs[key].team2 ? <TeamLogo name={playoffs[key].team2} size={42} /> : null}
                     </div>
                   </div>
 
-                  <Input
-                    type="number"
-                    value={playoffs[key].score1}
-                    onChange={(e) =>
-                      updatePlayoffField(key, "score1", Number(e.target.value))
-                    }
-                    disabled={mode !== "admin"}
-                  />
-                  <Input
-                    type="number"
-                    value={playoffs[key].score2}
-                    onChange={(e) =>
-                      updatePlayoffField(key, "score2", Number(e.target.value))
-                    }
-                    disabled={mode !== "admin"}
-                  />
+                  <Input type="number" value={playoffs[key].score1} onChange={(e) => updatePlayoffField(key, "score1", Number(e.target.value))} disabled={mode !== "admin"} />
+                  <Input type="number" value={playoffs[key].score2} onChange={(e) => updatePlayoffField(key, "score2", Number(e.target.value))} disabled={mode !== "admin"} />
 
-                  {mode === "admin" &&
-                    playoffs[key].team1 &&
-                    playoffs[key].team2 && (
-                      <Button onClick={() => savePlayoff(key)}>
-                        Save {label}
-                      </Button>
-                    )}
+                  {mode === "admin" && playoffs[key].team1 && playoffs[key].team2 && (
+                    <Button onClick={() => savePlayoff(key)}>Save {label}</Button>
+                  )}
 
                   <div style={{ color: "#aac3ff", marginTop: 6 }}>
                     Winner: {playoffs[key].winner || "TBD"}
@@ -1654,13 +1549,7 @@ export default function App() {
 
         {screen === "stats" && (
           <>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: 16
-              }}
-            >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               <Card>
                 <h2 style={{ marginTop: 0 }}>Tournament Stats</h2>
                 <p>Total Matches Played: {stats.matches}</p>
@@ -1673,15 +1562,7 @@ export default function App() {
               <Card>
                 <h2 style={{ marginTop: 0 }}>Top 4 Snapshot</h2>
                 {top4.map((t, i) => (
-                  <div
-                    key={t.name}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      marginBottom: 10
-                    }}
-                  >
+                  <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                     <strong>{i + 1}.</strong>
                     <TeamLogo name={t.name} size={40} />
                     <span>{t.name}</span>
@@ -1711,9 +1592,7 @@ export default function App() {
                     <div>{r.match_no}</div>
                     <TeamLogo name={r.team1} size={38} />
                     <div>{r.team1}</div>
-                    <div style={{ fontWeight: 900 }}>
-                      {r.score1}-{r.score2}
-                    </div>
+                    <div style={{ fontWeight: 900 }}>{r.score1}-{r.score2}</div>
                     <div style={{ textAlign: "right" }}>{r.team2}</div>
                     <div style={{ display: "flex", justifyContent: "flex-end" }}>
                       <TeamLogo name={r.team2} size={38} />
@@ -1745,24 +1624,22 @@ export default function App() {
               </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {[getStatusPill("LIVE"), getStatusPill("FT"), getStatusPill("YET")].map(
-                  (pill) => (
-                    <div
-                      key={pill.label}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 999,
-                        background: pill.bg,
-                        color: pill.color,
-                        border: pill.border,
-                        fontSize: 12,
-                        fontWeight: 800
-                      }}
-                    >
-                      {pill.label}
-                    </div>
-                  )
-                )}
+                {[getStatusPill("LIVE"), getStatusPill("FT"), getStatusPill("YET")].map((pill) => (
+                  <div
+                    key={pill.label}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 999,
+                      background: pill.bg,
+                      color: pill.color,
+                      border: pill.border,
+                      fontSize: 12,
+                      fontWeight: 800
+                    }}
+                  >
+                    {pill.label}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1785,9 +1662,7 @@ export default function App() {
                       border: "1px solid rgba(255,255,255,0.06)"
                     }}
                   >
-                    <div style={{ fontWeight: 800, color: "#d8e4ff" }}>
-                      Match {row.matchNo}
-                    </div>
+                    <div style={{ fontWeight: 800, color: "#d8e4ff" }}>Match {row.matchNo}</div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <TeamLogo name={row.team1} size={44} rounded={14} />
@@ -1795,28 +1670,13 @@ export default function App() {
                     </div>
 
                     <div style={{ textAlign: "center" }}>
-                      <div
-                        style={{
-                          fontSize: 22,
-                          fontWeight: 900,
-                          color: row.status === "LIVE" ? "#ffb4b4" : "#ffffff"
-                        }}
-                      >
+                      <div style={{ fontSize: 22, fontWeight: 900, color: row.status === "LIVE" ? "#ffb4b4" : "#ffffff" }}>
                         {row.score}
                       </div>
                     </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        justifyContent: "flex-end"
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, textAlign: "right" }}>
-                        {row.team2}
-                      </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+                      <div style={{ fontWeight: 700, textAlign: "right" }}>{row.team2}</div>
                       <TeamLogo name={row.team2} size={44} rounded={14} />
                     </div>
 
@@ -1935,8 +1795,7 @@ export default function App() {
           bottom: 0,
           left: 0,
           width: "100%",
-          background:
-            "linear-gradient(180deg, rgba(7,19,45,0.98) 0%, rgba(2,8,22,0.98) 100%)",
+          background: "linear-gradient(180deg, rgba(7,19,45,0.98) 0%, rgba(2,8,22,0.98) 100%)",
           borderTop: "1px solid rgba(130,175,255,0.18)",
           padding: "12px 16px",
           overflow: "hidden"
@@ -1957,14 +1816,7 @@ export default function App() {
               : "League Stage Completed"}
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              minWidth: 260,
-              overflow: "hidden",
-              color: "#ffe16b"
-            }}
-          >
+          <div style={{ flex: 1, minWidth: 260, overflow: "hidden", color: "#ffe16b" }}>
             <div className="ballers-ticker-track">{matchState.ticker}</div>
           </div>
         </div>
