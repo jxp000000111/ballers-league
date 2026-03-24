@@ -301,6 +301,33 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  const adjustLiveScore = async (teamIndex, delta) => {
+    if (mode !== "admin" || !session) return;
+    const nextScore1 = Math.max(0, Number(matchState.score1 || 0) + (teamIndex === 1 ? delta : 0));
+    const nextScore2 = Math.max(0, Number(matchState.score2 || 0) + (teamIndex === 2 ? delta : 0));
+
+    await supabase.from("match_state").update({
+      score1: nextScore1,
+      score2: nextScore2,
+      ticker:
+        matchState.match_index < fixtures.length
+          ? `LIVE • ${fixtures[matchState.match_index][0]} ${nextScore1}-${nextScore2} ${fixtures[matchState.match_index][1]}`
+          : matchState.ticker
+    }).eq("id", 1);
+  };
+
+  const resetLiveScore = async () => {
+    if (mode !== "admin" || !session) return;
+    await supabase.from("match_state").update({
+      score1: 0,
+      score2: 0,
+      ticker:
+        matchState.match_index < fixtures.length
+          ? `LIVE • ${fixtures[matchState.match_index][0]} 0-0 ${fixtures[matchState.match_index][1]}`
+          : "Welcome to Ballers League Vol. II"
+    }).eq("id", 1);
+  };
+
   const updateScore = async () => {
     if (mode !== "admin" || !session) return;
     if (matchState.match_index >= fixtures.length) return;
@@ -429,7 +456,7 @@ export default function App() {
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
           <div>
-            <h1 style={{ margin: 0, letterSpacing: 1 }}>BALLERS LEAGUE VOL:II - LEAGUE STANDINGS</h1>
+            <h1 style={{ margin: 0, letterSpacing: 1 }}>BALLERS LEAGUE MATCHDAY SYSTEM</h1>
             <div style={{ color: "#b6c3e7", marginTop: 6 }}>{mode === "admin" ? "Admin Control Room" : "Viewer Broadcast Mode"}</div>
           </div>
           <div>
@@ -494,10 +521,34 @@ export default function App() {
                         <TeamLogo name={fixtures[matchState.match_index][1]} size={56} />
                       </div>
                     </div>
-                    <Input type="number" value={matchState.score1} onChange={(e) => setMatchState((p) => ({ ...p, score1: Number(e.target.value) }))} />
-                    <Input type="number" value={matchState.score2} onChange={(e) => setMatchState((p) => ({ ...p, score2: Number(e.target.value) }))} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center", maxWidth: 520, marginTop: 10 }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 34, fontWeight: 900, color: "#ffffff" }}>{matchState.score1}</div>
+                        {mode === "admin" && (
+                          <div>
+                            <Button onClick={() => adjustLiveScore(1, 1)} style={{ minWidth: 52 }}>+1</Button>
+                            <Button onClick={() => adjustLiveScore(1, -1)} style={{ minWidth: 52, background: "#173563" }}>-1</Button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "center", color: "#8eb0ff", fontWeight: 800 }}>LIVE</div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 34, fontWeight: 900, color: "#ffffff" }}>{matchState.score2}</div>
+                        {mode === "admin" && (
+                          <div>
+                            <Button onClick={() => adjustLiveScore(2, 1)} style={{ minWidth: 52 }}>+1</Button>
+                            <Button onClick={() => adjustLiveScore(2, -1)} style={{ minWidth: 52, background: "#173563" }}>-1</Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <br />
-                    {mode === "admin" ? <Button onClick={updateScore}>Submit Result</Button> : <div style={{ color: "#9bb3e4" }}>Viewer mode cannot edit scores.</div>}
+                    {mode === "admin" ? (
+                      <>
+                        <Button onClick={resetLiveScore} style={{ background: "#173563" }}>Reset Live Score</Button>
+                        <Button onClick={updateScore}>Submit Full Time Score</Button>
+                      </>
+                    ) : <div style={{ color: "#9bb3e4" }}>Viewer mode cannot edit scores.</div>}
                   </>
                 ) : (
                   <h3>League Stage Completed</h3>
@@ -534,7 +585,7 @@ export default function App() {
             </Card>
 
             <Card>
-              <h2 style={{ marginTop: 0 }}>Playoffs</h2>
+              <h2 style={{ marginTop: 0 }}>IPL-Style Playoffs</h2>
               {playoffStages.map(({ key, label }) => (
                 <div key={key} style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12, marginTop: 12 }}>
                   <h3>{label}</h3>
