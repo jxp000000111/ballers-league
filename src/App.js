@@ -384,7 +384,6 @@ export default function App() {
   const init = async () => {
     const { data } = await supabase.auth.getSession();
     if (!mounted) return;
-
     setSession(data.session || null);
     setAuthReady(true);
     await fetchData();
@@ -393,7 +392,7 @@ export default function App() {
   init();
 
   const { data: authListener } = supabase.auth.onAuthStateChange(
-    async (_event, nextSession) => {
+    (_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession || null);
       setAuthReady(true);
@@ -402,49 +401,44 @@ export default function App() {
 
   const channel = supabase
     .channel("ballers-live-realtime")
-
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "match_state" },
       async (payload) => {
-        console.log("MATCH UPDATE 🔴", payload);
+        console.log("match_state changed", payload);
         if (!mounted) return;
         await fetchData();
       }
     )
-
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "teams" },
-      async (payload) => {
-        console.log("TEAMS UPDATE 🟡", payload);
-        if (!mounted) return;
-        await fetchData();
-      }
-    )
-
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "results" },
       async (payload) => {
-        console.log("RESULT UPDATE 🟢", payload);
+        console.log("results changed", payload);
         if (!mounted) return;
         await fetchData();
       }
     )
-
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "teams" },
+      async (payload) => {
+        console.log("teams changed", payload);
+        if (!mounted) return;
+        await fetchData();
+      }
+    )
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "playoffs" },
       async (payload) => {
-        console.log("PLAYOFF UPDATE 🔵", payload);
+        console.log("playoffs changed", payload);
         if (!mounted) return;
         await fetchData();
       }
     )
-
     .subscribe((status) => {
-      console.log("REALTIME STATUS:", status);
+      console.log("Realtime status:", status);
     });
 
   return () => {
