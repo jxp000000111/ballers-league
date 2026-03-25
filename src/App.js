@@ -42,6 +42,9 @@ const TEAM_LOGOS = {
   "Timeless Titans": "/logos/timelesstitans.png"
 };
 
+const BALLERS_LOGO = "/logos/ballers-league-vol2.png";
+const TREASURE_HUNT_URL = "https://ballers-league-treasure-hunt.streamlit.app/";
+
 const shell = {
   minHeight: "100vh",
   background:
@@ -1095,27 +1098,99 @@ export default function App() {
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: 12,
-            marginBottom: 18
+            gap: 16,
+            marginBottom: 22
           }}
         >
-          <div>
-            <h1 style={{ margin: 0, letterSpacing: 1 }}>BALLERS LEAGUE MATCHDAY SYSTEM</h1>
-            <div style={{ color: "#b6c3e7", marginTop: 6 }}>
-              {mode === "admin" ? "Admin Control Room" : "Viewer Broadcast Mode"}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap"
+            }}
+          >
+            <div
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: 20,
+                background: "rgba(255,255,255,0.06)",
+                display: "grid",
+                placeItems: "center",
+                border: "1px solid rgba(255,255,255,0.1)",
+                boxShadow: "0 10px 24px rgba(0,0,0,0.25)"
+              }}
+            >
+              <img
+                src={BALLERS_LOGO}
+                alt="Ballers League Vol II"
+                style={{
+                  width: 72,
+                  height: 72,
+                  objectFit: "contain"
+                }}
+              />
+            </div>
+
+            <div>
+              <h1
+                style={{
+                  margin: 0,
+                  letterSpacing: 1,
+                  fontSize: 30,
+                  fontWeight: 900
+                }}
+              >
+                BALLERS LEAGUE VOL: II
+              </h1>
+              <div style={{ color: "#b6c3e7", marginTop: 6, fontSize: 14 }}>
+                {mode === "admin" ? "Admin Control Room" : "Viewer Broadcast Mode"}
+              </div>
             </div>
           </div>
 
-          <div>
-            <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button>
-            <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
-            <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
-            <Button onClick={() => setScreen("players")} style={{ background: screen === "players" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Player Stats</Button>
-            {mode === "admin" && (
-              <Button onClick={handleLogout} style={{ background: "linear-gradient(180deg, #dc2626 0%, #991b1b 100%)" }}>
-                Logout
-              </Button>
-            )}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap"
+            }}
+          >
+            <a
+              href={TREASURE_HUNT_URL}
+              target="_blank"
+              rel="noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <button
+                style={{
+                  padding: "12px 18px",
+                  background: "linear-gradient(180deg, #f59e0b 0%, #d97706 100%)",
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  fontWeight: 800,
+                  boxShadow: "0 10px 22px rgba(217,119,6,0.28)"
+                }}
+              >
+                Treasure Hunt
+              </button>
+            </a>
+
+            <div>
+              <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button>
+              <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
+              <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
+              <Button onClick={() => setScreen("players")} style={{ background: screen === "players" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Player Stats</Button>
+              {mode === "admin" && (
+                <Button onClick={handleLogout} style={{ background: "linear-gradient(180deg, #dc2626 0%, #991b1b 100%)" }}>
+                  Logout
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
