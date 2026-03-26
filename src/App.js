@@ -1181,8 +1181,7 @@ export default function App() {
             </a>
 
             <div>
-              {mode === "admin" && ( <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button> 
-                  )}
+              <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button> 
               <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
               <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
               <Button onClick={() => setScreen("players")} style={{ background: screen === "players" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Player Stats</Button>
@@ -1429,7 +1428,7 @@ export default function App() {
                           <Button onClick={updateScore}>Submit Full Time Score</Button>
                         </>
                       ) : (
-                        <div style={{ color: "#9bb3e4" }}>Viewer mode cannot edit scores.</div>
+                        <div style={{ color: "#9bb3e4" }}>Tryna change scores here, are we? :D.</div>
                       )}
                     </div>
                   </>
@@ -1507,12 +1506,13 @@ export default function App() {
             </div>
 
             <Card>
-              <h2 style={{ marginTop: 0 }}>Off-Pitch Points</h2>
+              <h2 style={{ marginTop: 0 }}>Off-Pitch Points (earned from events)</h2>
               <select
                 value={selectedTeam}
                 onChange={(e) => setSelectedTeam(e.target.value)}
                 style={{ padding: 10, borderRadius: 10, marginRight: 10, background: "#fff" }}
                 disabled={mode !== "admin"}
+                card.hidden = {mode !== "admin"}
               >
                 {teams.map((t) => (
                   <option key={t.name} value={t.name}>{t.name}</option>
@@ -1523,7 +1523,7 @@ export default function App() {
               {mode === "admin" ? (
                 <Button onClick={addOffPitch}>Add Off-Pitch Points</Button>
               ) : (
-                <div style={{ color: "#9bb3e4" }}>Viewer mode is read-only.</div>
+                <div style={{ color: "#9bb3e4" }}>Hunt Treasures and win Dares to get points!</div>
               )}
             </Card>
 
@@ -1537,7 +1537,7 @@ export default function App() {
                   gap: 10
                 }}
               >
-                <h2 style={{ margin: 0 }}>Leaderboard</h2>
+                <h2 style={{ margin: 0 }}>LEADERBOARD</h2>
                 {mode === "admin" && <Button onClick={seedPlayoffs}>Seed Playoffs From Top 4</Button>}
               </div>
 
@@ -1570,7 +1570,7 @@ export default function App() {
             </Card>
 
             <Card>
-              <h2 style={{ marginTop: 0 }}>IPL-Style Playoffs</h2>
+              <h2 style={{ marginTop: 0 }}>VOL:II Playoffs</h2>
               {playoffStages.map(({ key, label }) => (
                 <div
                   key={key}
