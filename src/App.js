@@ -1145,7 +1145,7 @@ export default function App() {
                 BALLERS LEAGUE VOL: II
               </h1>
               <div style={{ color: "#b6c3e7", marginTop: 6, fontSize: 14 }}>
-                {mode === "admin" ? "Admin Control Room" : "Viewer Broadcast Mode"}
+                {mode === "admin" ? "Admin Control Room" : "League Standings"}
               </div>
             </div>
           </div>
@@ -1181,7 +1181,8 @@ export default function App() {
             </a>
 
             <div>
-              <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button>
+              {mode === "admin" && ( <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room</Button> 
+                  )}
               <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
               <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
               <Button onClick={() => setScreen("players")} style={{ background: screen === "players" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Player Stats</Button>
@@ -1206,14 +1207,11 @@ export default function App() {
           >
             <div>
               <div style={{ fontSize: 14, color: "#aac3ff", textTransform: "uppercase", letterSpacing: 1.5 }}>
-                League Identities
+                Whos BALLIN It Out This Season?
               </div>
               <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>
-                Animated Team Logo Strip
+                TEAMS LIST
               </div>
-            </div>
-            <div style={{ color: "#c9d8ff" }}>Dark blue broadcast theme enabled</div>
-          </div>
 
           <div
             style={{
