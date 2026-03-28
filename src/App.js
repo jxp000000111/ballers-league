@@ -479,7 +479,6 @@ export default function App() {
 
     const channel = supabase
       .channel("ballers-live-realtime-fast")
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_state" },
@@ -522,7 +521,6 @@ export default function App() {
           setMatchState((prevState) => ({ ...prevState, ...newRow }));
         }
       )
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "goal_events" },
@@ -536,7 +534,6 @@ export default function App() {
           }
         }
       )
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "clean_sheet_events" },
@@ -550,7 +547,6 @@ export default function App() {
           }
         }
       )
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "teams" },
@@ -564,7 +560,6 @@ export default function App() {
           }
         }
       )
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "results" },
@@ -580,7 +575,6 @@ export default function App() {
           }
         }
       )
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "playoffs" },
@@ -599,7 +593,6 @@ export default function App() {
           }
         }
       )
-
       .subscribe((status) => {
         console.log("Realtime status:", status);
       });
@@ -1181,7 +1174,7 @@ export default function App() {
             </a>
 
             <div>
-              <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room (Admin)</Button> 
+              <Button onClick={() => setScreen("control")} style={{ background: screen === "control" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Control Room (Admin)</Button>
               <Button onClick={() => setScreen("stats")} style={{ background: screen === "stats" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Stats Screen</Button>
               <Button onClick={() => setScreen("fixtures")} style={{ background: screen === "fixtures" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>All Fixtures</Button>
               <Button onClick={() => setScreen("players")} style={{ background: screen === "players" ? "linear-gradient(180deg, #4a8fff 0%, #2563eb 100%)" : "#173563" }}>Player Stats</Button>
@@ -1211,6 +1204,8 @@ export default function App() {
               <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>
                 TEAMS LIST
               </div>
+            </div>
+          </div>
 
           <div
             style={{
@@ -1507,23 +1502,33 @@ export default function App() {
 
             <Card>
               <h2 style={{ marginTop: 0 }}>Off-Pitch Points (earned from events)</h2>
-              <select
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-                style={{ padding: 10, borderRadius: 10, marginRight: 10, background: "#fff" }}
-                disabled={mode !== "admin"}
-                card.hidden = {mode !== "admin"}
-              >
-                {teams.map((t) => (
-                  <option key={t.name} value={t.name}>{t.name}</option>
-                ))}
-              </select>
-              <Input type="number" value={bonusPoints} onChange={(e) => setBonusPoints(Number(e.target.value))} disabled={mode !== "admin"} />
-              <br />
+
               {mode === "admin" ? (
-                <Button onClick={addOffPitch}>Add Off-Pitch Points</Button>
+                <>
+                  <select
+                    value={selectedTeam}
+                    onChange={(e) => setSelectedTeam(e.target.value)}
+                    style={{ padding: 10, borderRadius: 10, marginRight: 10, background: "#fff" }}
+                  >
+                    {teams.map((t) => (
+                      <option key={t.name} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+
+                  <Input
+                    type="number"
+                    value={bonusPoints}
+                    onChange={(e) => setBonusPoints(Number(e.target.value))}
+                  />
+
+                  <br />
+
+                  <Button onClick={addOffPitch}>Add Off-Pitch Points</Button>
+                </>
               ) : (
-                <div style={{ color: "#9bb3e4" }}>Hunt Treasures and win Dares to get points!</div>
+                <div style={{ color: "#9bb3e4" }}>
+                  Hunt Treasures and win Dares to get points!
+                </div>
               )}
             </Card>
 
