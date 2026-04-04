@@ -358,8 +358,6 @@ export default function App() {
   });
 
   const [screen, setScreen] = useState("control");
-  const [selectedTeam, setSelectedTeam] = useState("Amigos FC");
-  const [bonusPoints, setBonusPoints] = useState(10);
   const [recentResults, setRecentResults] = useState([]);
   const [playoffs, setPlayoffs] = useState({
     qualifier1: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
@@ -1008,27 +1006,6 @@ export default function App() {
     setTeam2CardType("yellow");
   };
 
-  const addOffPitch = async () => {
-    if (mode !== "admin" || !session) return;
-    const team = teams.find((t) => t.name === selectedTeam);
-    if (!team) return;
-
-    await supabase
-      .from("teams")
-      .update({
-        pts: (team.pts || 0) + Number(bonusPoints),
-        off: (team.off || 0) + Number(bonusPoints)
-      })
-      .eq("id", team.id);
-
-    await supabase
-      .from("match_state")
-      .update({
-        ticker: `${selectedTeam} earned ${bonusPoints} off-pitch points`
-      })
-      .eq("id", 1);
-  };
-
   const seedPlayoffs = async () => {
     if (mode !== "admin" || !session || top4.length < 4) return;
 
@@ -1671,38 +1648,6 @@ export default function App() {
                     ({event.card_type === "yellow" ? "Yellow" : "Red"})
                   </div>
                 ))
-              )}
-            </Card>
-
-            <Card>
-              <h2 style={{ marginTop: 0 }}>Off-Pitch Points (earned from events)</h2>
-
-              {mode === "admin" ? (
-                <>
-                  <select
-                    value={selectedTeam}
-                    onChange={(e) => setSelectedTeam(e.target.value)}
-                    style={{ padding: 10, borderRadius: 10, marginRight: 10, background: "#fff" }}
-                  >
-                    {teams.map((t) => (
-                      <option key={t.name} value={t.name}>{t.name}</option>
-                    ))}
-                  </select>
-
-                  <Input
-                    type="number"
-                    value={bonusPoints}
-                    onChange={(e) => setBonusPoints(Number(e.target.value))}
-                  />
-
-                  <br />
-
-                  <Button onClick={addOffPitch}>Add Off-Pitch Points</Button>
-                </>
-              ) : (
-                <div style={{ color: "#9bb3e4" }}>
-                  Hunt Treasures and win Dares to get points!
-                </div>
               )}
             </Card>
 
