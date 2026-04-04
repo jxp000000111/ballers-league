@@ -412,56 +412,73 @@ export default function App() {
   }, [matchState]);
 
   const fetchData = async () => {
-    const [
-      { data: teamsData },
-      { data: stateData },
-      { data: resultData },
-      { data: playoffData },
-      { data: playersData },
-      { data: goalEventsData },
-      { data: cleanSheetData },
-      { data: cardEventsData }
-    ] = await Promise.all([
-      supabase.from("teams").select("*").order("pts", { ascending: false }),
-      supabase.from("match_state").select("*").eq("id", 1).single(),
-      supabase.from("results").select("*").order("match_no", { ascending: false }),
-      supabase.from("playoffs").select("*"),
-      supabase.from("players").select("*").eq("is_active", true).order("team_name").order("name"),
-      supabase.from("goal_events").select("*").order("created_at", { ascending: false }),
-      supabase.from("clean_sheet_events").select("*").order("created_at", { ascending: false }),
-      supabase.from("card_events").select("*").order("created_at", { ascending: false })
-    ]);
+try {
+const [
+{ data: teamsData, error: teamsError },
+{ data: stateData, error: stateError },
+{ data: resultData, error: resultError },
+{ data: playoffData, error: playoffError },
+{ data: playersData, error: playersError },
+{ data: goalEventsData, error: goalEventsError },
+{ data: cleanSheetData, error: cleanSheetError },
+{ data: cardEventsData, error: cardEventsError }
+] = await Promise.all([
+supabase.from("teams").select("*").order("pts", { ascending: false }),
+supabase.from("match_state").select("*").eq("id", 1).single(),
+supabase.from("results").select("*").order("match_no", { ascending: false }),
+supabase.from("playoffs").select("*"),
+supabase
+.from("players")
+.select("*")
+.eq("is_active", true)
+.order("team_name")
+.order("name"),
+supabase.from("goal_events").select("*").order("created_at", { ascending: false }),
+supabase.from("clean_sheet_events").select("*").order("created_at", { ascending: false }),
+supabase.from("card_events").select("*").order("created_at", { ascending: false })
+]);
 
-    if (teamsData) {
-      setTeams(teamsData);
-      if (teamsData.length && !selectedTeam) setSelectedTeam(teamsData[0].name);
-    }
-    if (stateData) setMatchState(stateData);
-    if (resultData) setRecentResults(resultData);
-    if (playersData) setPlayers(playersData);
-    if (goalEventsData) setGoalEvents(goalEventsData);
-    if (cleanSheetData) setCleanSheetEvents(cleanSheetData);
-    if (cardEventsData) setCardEvents(cardEventsData);
+if (teamsError) console.error("teamsError:", teamsError);
+if (stateError) console.error("stateError:", stateError);
+if (resultError) console.error("resultError:", resultError);
+if (playoffError) console.error("playoffError:", playoffError);
+if (playersError) console.error("playersError:", playersError);
+if (goalEventsError) console.error("goalEventsError:", goalEventsError);
+if (cleanSheetError) console.error("cleanSheetError:", cleanSheetError);
+if (cardEventsError) console.error("cardEventsError:", cardEventsError);
 
-    if (playoffData) {
-      const next = {
-        qualifier1: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
-        eliminator: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
-        qualifier2: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
-        final: { team1: "", team2: "", score1: 0, score2: 0, winner: "" }
-      };
-      playoffData.forEach((row) => {
-        next[row.stage] = {
-          team1: row.team1 || "",
-          team2: row.team2 || "",
-          score1: row.score1 || 0,
-          score2: row.score2 || 0,
-          winner: row.winner || ""
-        };
-      });
-      setPlayoffs(next);
-    }
-  };
+if (teamsData) setTeams(teamsData);
+if (stateData) setMatchState(stateData);
+if (resultData) setRecentResults(resultData);
+if (playersData) setPlayers(playersData);
+if (goalEventsData) setGoalEvents(goalEventsData);
+if (cleanSheetData) setCleanSheetEvents(cleanSheetData);
+if (cardEventsData) setCardEvents(cardEventsData);
+
+if (playoffData) {
+const next = {
+qualifier1: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
+eliminator: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
+qualifier2: { team1: "", team2: "", score1: 0, score2: 0, winner: "" },
+final: { team1: "", team2: "", score1: 0, score2: 0, winner: "" }
+};
+
+playoffData.forEach((row) => {
+next[row.stage] = {
+team1: row.team1 || "",
+team2: row.team2 || "",
+score1: row.score1 || 0,
+score2: row.score2 || 0,
+winner: row.winner || ""
+};
+});
+
+setPlayoffs(next);
+}
+} catch (err) {
+console.error("fetchData crashed:", err);
+}
+};
 
   useEffect(() => {
     let mounted = true;
