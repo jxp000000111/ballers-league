@@ -626,7 +626,7 @@ export default function App() {
 
   const sorted = useMemo(() => {
     return [...teams].sort(
-      (a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || b.off - a.off
+      (a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf
     );
   }, [teams]);
 
@@ -1685,7 +1685,7 @@ export default function App() {
                   <div>
                     <div style={{ fontWeight: 800 }}>{t.name}</div>
                     <div style={{ color: "#9bb3e4", fontSize: 13 }}>
-                      MP {t.played} • GF {t.gf} • GA {t.ga} • GD {t.gd} • Off {t.off}
+                      MP {t.played} • GF {t.gf} • GA {t.ga} • GD {t.gd}
                     </div>
                   </div>
                   <div style={{ fontWeight: 900, fontSize: 18 }}>{t.pts} pts</div>
